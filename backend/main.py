@@ -1,11 +1,13 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import logging
 from backend.api.router import api_router
+from backend.middleware.logging import get_logger
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from backend.config.settings import get_settings
+
+logger = get_logger(__name__)
+settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -14,9 +16,10 @@ async def lifespan(app: FastAPI):
     logger.info("Application shutdown")
 
 app = FastAPI(
-    title="AI Media Factory",
+    title=settings.app_name,
     description="Backend API for AI Media Factory",
-    version="1.0.0",
+    version=settings.app_version,
+    debug=settings.debug,
     lifespan=lifespan,
 )
 
