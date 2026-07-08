@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     storage_path: str = "./storage"
     logs_path: str = "./logs"
     environment: Environment = Environment.DEVELOPMENT
+    text_provider: str = "fake"
+    audio_provider: str = "fake"
+    image_provider: str = "fake"
+    render_provider: str = "fake"
+    gemini_api_key: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

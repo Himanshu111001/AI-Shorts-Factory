@@ -37,6 +37,8 @@ class Video(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     script: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     hashtags: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
+    audio_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    rendered_video_path: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     
     status: Mapped[VideoStatus] = mapped_column(
         Enum(VideoStatus), default=VideoStatus.CREATED, nullable=False, index=True

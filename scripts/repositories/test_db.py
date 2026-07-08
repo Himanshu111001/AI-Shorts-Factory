@@ -2,13 +2,14 @@ import sys
 import os
 
 # Ensure the root project directory is in the Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from sqlalchemy import inspect
 from backend.config.database import engine
 from backend.models.base import Base
 # We must import the Channel model so that Base metadata knows about it
 from backend.models.channel import Channel
+from backend.models.video import Video
 
 def verify_database():
     try:

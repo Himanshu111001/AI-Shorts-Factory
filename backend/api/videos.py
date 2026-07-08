@@ -7,15 +7,17 @@ from backend.repositories.video_repository import VideoRepository
 from backend.schemas.video import VideoCreate, VideoUpdate, VideoResponse
 from backend.models.enums.video_status import VideoStatus
 from backend.services.video_service import VideoService
-
+from backend.api.dependencies import get_video_service_dependency
+from backend.services.pipeline_service import PipelineService
+from backend.api.pipeline_dependencies import get_pipeline_service_dependency
 router = APIRouter()
 
 @router.post("/", response_model=VideoResponse, status_code=status.HTTP_201_CREATED)
-def create_video(video_in: VideoCreate, db: Session = Depends(get_db)):
+def create_video(video_in: VideoCreate, service: VideoService = Depends(get_video_service_dependency)):
     """
     Create a new video project.
     """
-    service = VideoService(db)
+
     try:
         return service.create_video(video_in.model_dump())
     except ValueError as e:
@@ -79,18 +81,59 @@ def update_video(video_id: uuid.UUID, video_update: VideoUpdate, db: Session = D
 def update_video_status(
     video_id: uuid.UUID, 
     video_status: VideoStatus = Body(..., embed=True, alias="status"), 
-    db: Session = Depends(get_db)
+    service: VideoService = Depends(get_video_service_dependency)
 ):
     """
     Fast-path endpoint to update only the lifecycle status of a video.
     """
-    service = VideoService(db)
     try:
         return service.transition_status(video_id, video_status)
     except ValueError as e:
         msg = str(e)
         if "Video not found" in msg:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
+        else:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+
+@router.post("/{video_id}/generate-text", response_model=VideoResponse)
+def generate_video_text(
+    video_id: uuid.UUID,
+    service: VideoService = Depends(get_video_service_dependency)
+):
+    """
+    Generate all text content (title, description, script, hashtags) for a video.
+    """
+    try:
+        return service.generate_text_content(video_id)
+    except ValueError as e:
+        msg = str(e)
+        if "Video not found" in msg or "Channel not found" in msg:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
+        elif "Text generation provider is not configured" in msg:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=msg)
+        elif "Text generation requires PROCESSING status" in msg:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+        else:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+
+@router.post("/{video_id}/process", response_model=VideoResponse)
+def process_video(
+    video_id: uuid.UUID,
+    pipeline_service: PipelineService = Depends(get_pipeline_service_dependency)
+):
+    """
+    Orchestrate the complete video generation pipeline.
+    """
+    try:
+        return pipeline_service.process_video(video_id)
+    except ValueError as e:
+        msg = str(e)
+        if "Video not found" in msg or "Channel not found" in msg:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg)
+        elif "Text generation provider is not configured" in msg:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=msg)
+        elif "Text generation requires PROCESSING status" in msg:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
         else:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
 

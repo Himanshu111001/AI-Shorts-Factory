@@ -4,6 +4,7 @@ from backend.repositories.video_repository import VideoRepository
 from backend.repositories.channel_repository import ChannelRepository
 from backend.models.video import Video
 from backend.models.enums.video_status import VideoStatus
+from backend.providers.text.base import TextGenerationProvider
 
 class VideoService:
     """
@@ -22,10 +23,11 @@ class VideoService:
         VideoStatus.UPLOADED: set(),
     }
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, text_provider: TextGenerationProvider | None = None):
         self.db = db
         self.video_repo = VideoRepository(db)
         self.channel_repo = ChannelRepository(db)
+        self.text_provider = text_provider
 
     def create_video(self, video_data: dict) -> Video:
         """
@@ -95,3 +97,44 @@ class VideoService:
             raise ValueError(f"Invalid status transition: {current_status.value} -> {new_status.value}")
             
         return self.video_repo.update_status(video_id, new_status)
+
+    def generate_text_content(self, video_id: uuid.UUID) -> Video:
+        """
+        Generate and persist text content (title, description, script, hashtags) for a video.
+        
+        Args:
+            video_id: UUID of the video to update.
+            
+        Returns:
+            The updated Video object.
+            
+        Raises:
+            ValueError: If video/channel is missing, provider is unconfigured, or status is invalid.
+        """
+        video = self.video_repo.get_by_id(video_id)
+        if not video:
+            raise ValueError("Video not found")
+            
+        if self.text_provider is None:
+            raise ValueError("Text generation provider is not configured")
+            
+        channel = self.channel_repo.get_by_id(video.channel_id)
+        if not channel:
+            raise ValueError("Channel not found")
+            
+        if video.status != VideoStatus.PROCESSING:
+            raise ValueError(f"Text generation requires PROCESSING status, current status: {video.status.value}")
+            
+        title = self.text_provider.generate_title(video.topic, channel.niche)
+        description = self.text_provider.generate_description(video.topic, title, channel.niche)
+        script = self.text_provider.generate_script(video.topic, title, channel.niche)
+        hashtags = self.text_provider.generate_hashtags(video.topic, title, channel.niche)
+        
+        update_data = {
+            "title": title,
+            "description": description,
+            "script": script,
+            "hashtags": hashtags
+        }
+        
+        return self.video_repo.update(video_id, update_data)

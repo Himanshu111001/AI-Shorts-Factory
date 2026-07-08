@@ -28,6 +28,8 @@ class VideoResponse(VideoBase):
     description: Optional[str] = None
     script: Optional[str] = None
     hashtags: Optional[List[str]] = None
+    audio_path: Optional[str] = None
+    rendered_video_path: Optional[str] = None
     status: VideoStatus
     created_at: datetime
     updated_at: datetime

@@ -2,7 +2,7 @@ import sys
 import os
 
 # Ensure the root project directory is in the Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from backend.config.session import SessionLocal
 from backend.repositories.channel_repository import ChannelRepository

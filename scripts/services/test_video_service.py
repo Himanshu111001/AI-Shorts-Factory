@@ -4,7 +4,7 @@ import uuid
 import traceback
 
 # Ensure the root project directory is in the Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 # 1. Imports to ensure SQLAlchemy metadata is populated
 from backend.models.base import Base
