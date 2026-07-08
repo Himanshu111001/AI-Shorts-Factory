@@ -6,6 +6,8 @@ from backend.services.audio_service import AudioService
 from backend.services.image_service import ImageService
 from backend.providers.audio.base import AudioGenerationProvider
 from backend.providers.image.base import ImageGenerationProvider
+from backend.services.render_service import RenderService
+from backend.providers.render.base import RenderProvider
 
 def get_video_service(
     db: Session,
@@ -59,3 +61,14 @@ def get_image_service(
         image_provider=image_provider,
     )
 
+def get_render_service(
+    db: Session,
+    render_provider: RenderProvider,
+) -> RenderService:
+    """
+    Centralized application-level object assembly for RenderService.
+    """
+    return RenderService(
+        db=db,
+        render_provider=render_provider,
+    )
