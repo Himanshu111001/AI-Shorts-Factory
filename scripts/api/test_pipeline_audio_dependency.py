@@ -13,11 +13,14 @@ from backend.providers.audio.dependency import get_audio_provider
 from backend.providers.audio.fake import FakeAudioGenerationProvider
 from backend.providers.image.dependency import get_image_provider
 from backend.providers.image.fake import FakeImageGenerationProvider
+from backend.providers.render.dependency import get_render_provider
+from backend.providers.render.fake import FakeRenderProvider
 from backend.workers.video_worker import VideoWorker
 from backend.services.pipeline_service import PipelineService
 from backend.services.video_service import VideoService
 from backend.services.audio_service import AudioService
 from backend.services.image_service import ImageService
+from backend.services.render_service import RenderService
 from backend.services.job_service import JobService
 from backend.config.session import get_db
 
@@ -30,6 +33,7 @@ def test_pipeline_dependency_identity(
     vs = pipeline.video_service
     ast = pipeline.audio_service
     ist = pipeline.image_service
+    rst = pipeline.render_service
     js = worker.job_service
     
     return {
@@ -38,12 +42,15 @@ def test_pipeline_dependency_identity(
         "is_vs": isinstance(vs, VideoService),
         "is_ast": isinstance(ast, AudioService),
         "is_ist": isinstance(ist, ImageService),
+        "is_rst": isinstance(rst, RenderService),
         "db_match_vs": js.db is vs.db,
         "db_match_ast": js.db is ast.db,
         "db_match_ist": js.db is ist.db,
+        "db_match_rst": js.db is rst.db,
         "vs_provider_is_fake": isinstance(vs.text_provider, FakeTextGenerationProvider),
         "ast_provider_is_fake": isinstance(ast.audio_provider, FakeAudioGenerationProvider),
         "ist_provider_is_fake": isinstance(ist.image_provider, FakeImageGenerationProvider),
+        "rst_provider_is_fake": isinstance(rst.render_provider, FakeRenderProvider),
     }
 
 def run_tests():
@@ -53,10 +60,12 @@ def run_tests():
     fake_text = FakeTextGenerationProvider()
     fake_audio = FakeAudioGenerationProvider()
     fake_image = FakeImageGenerationProvider()
+    fake_render = FakeRenderProvider()
     
     app.dependency_overrides[get_text_provider] = lambda: fake_text
     app.dependency_overrides[get_audio_provider] = lambda: fake_audio
     app.dependency_overrides[get_image_provider] = lambda: fake_image
+    app.dependency_overrides[get_render_provider] = lambda: fake_render
     
     client = TestClient(app)
     

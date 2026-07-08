@@ -26,6 +26,9 @@ from backend.providers.audio.base import AudioGenerationProvider
 from backend.providers.image.dependency import get_image_provider
 from backend.providers.image.fake import FakeImageGenerationProvider
 from backend.providers.image.base import ImageGenerationProvider
+from backend.providers.render.dependency import get_render_provider
+from backend.providers.render.fake import FakeRenderProvider
+from backend.providers.render.base import RenderProvider
 from backend.repositories.generated_image_repository import GeneratedImageRepository
 from backend.models.enums.job_status import JobStatus
 from backend.models.enums.video_status import VideoStatus
@@ -46,10 +49,12 @@ def run_tests():
     fake_text_provider = FakeTextGenerationProvider()
     fake_audio_provider = FakeAudioGenerationProvider()
     fake_image_provider = FakeImageGenerationProvider()
+    fake_render_provider = FakeRenderProvider()
     
     app.dependency_overrides[get_text_provider] = lambda: fake_text_provider
     app.dependency_overrides[get_audio_provider] = lambda: fake_audio_provider
     app.dependency_overrides[get_image_provider] = lambda: fake_image_provider
+    app.dependency_overrides[get_render_provider] = lambda: fake_render_provider
     
     client = TestClient(app)
     db = SessionLocal()
@@ -146,6 +151,7 @@ def run_tests():
         if video_fetched["script"] != expected_script: raise AssertionError("Script mismatch")
         if video_fetched["hashtags"] != expected_hashtags: raise AssertionError("Hashtags mismatch")
         if video_fetched["audio_path"] is None: raise AssertionError("audio_path is None")
+        if video_fetched["rendered_video_path"] is None: raise AssertionError("rendered_video_path is None")
         
         if not os.path.exists(video_fetched["audio_path"]):
             raise AssertionError("Generated audio artifact does not exist on filesystem")
@@ -156,6 +162,23 @@ def run_tests():
         if audio_content != expected_audio_content:
             raise AssertionError(f"Audio content mismatch. Expected: {expected_audio_content}, Got: {audio_content}")
             
+        if not os.path.exists(video_fetched["rendered_video_path"]):
+            raise AssertionError("Generated render artifact does not exist on filesystem")
+        
+        db.expire_all()
+        images = img_repo.get_by_video_id(uuid.UUID(video1_id))
+            
+        with open(video_fetched["rendered_video_path"], "r", encoding="utf-8") as f:
+            render_content = f.read().splitlines()
+        
+        if render_content[0] != "FAKE_RENDER_ARTIFACT": raise AssertionError("Render artifact header mismatch")
+        if render_content[1] != f"AUDIO_PATH:{video_fetched['audio_path']}": raise AssertionError("Render artifact audio path mismatch")
+        if render_content[2] != f"IMAGE_COUNT:{len(images)}": raise AssertionError("Render artifact image count mismatch")
+        
+        for i, img in enumerate(images, 1):
+            if render_content[i+2] != f"IMAGE_{i:03d}:{img.file_path}":
+                raise AssertionError(f"Render artifact image path mismatch for image {i}")
+
         if video_fetched["status"] != "PROCESSING": raise AssertionError("Video status not PROCESSING")
         
         # TEST 6
@@ -167,6 +190,8 @@ def run_tests():
         if db_video.script != expected_script: raise AssertionError("DB Script mismatch")
         if db_video.audio_path is None: raise AssertionError("DB audio_path is None")
         if not os.path.exists(db_video.audio_path): raise AssertionError("DB audio_path file missing")
+        if db_video.rendered_video_path is None: raise AssertionError("DB rendered_video_path is None")
+        if not os.path.exists(db_video.rendered_video_path): raise AssertionError("DB rendered_video_path file missing")
         
         db_job = job_repo.get_by_id(uuid.UUID(job1_id))
         if db_job.status != JobStatus.COMPLETED: raise AssertionError("DB Job status not COMPLETED")
@@ -262,7 +287,7 @@ def run_tests():
         db.expire_all()
         db_job3 = job_repo.get_by_id(uuid.UUID(job3_id))
         if db_job3.status != JobStatus.FAILED: raise AssertionError("Job status not FAILED")
-        if db_job3.progress != 65: raise AssertionError(f"Job progress not 65, got {db_job3.progress}")
+        if db_job3.progress != 55: raise AssertionError(f"Job progress not 55, got {db_job3.progress}")
         if db_job3.current_step != "Generating Images": raise AssertionError("Job current_step not Generating Images")
         
         db_video3 = video_repo.get_by_id(uuid.UUID(video3_id))
@@ -271,6 +296,52 @@ def run_tests():
         
         img_check = img_repo.get_by_video_id(uuid.UUID(video3_id))
         if len(img_check) > 0: raise AssertionError("Images were persisted despite failure")
+        
+        # RENDER FAILURE FLOW
+        print("\n[Failure Flow Setup] Creating CREATED Video and QUEUED Job for Render failure...")
+        topic4 = "Render failure flow test"
+        response = client.post(
+            "/videos/",
+            json={"channel_id": channel_id_str, "topic": topic4}
+        )
+        video4_id = response.json()["id"]
+        created_video_ids.append(video4_id)
+        client.patch(f"/videos/{video4_id}/status", json={"status": "PROCESSING"})
+        
+        response = client.post(f"/jobs/video/{video4_id}")
+        job4_id = response.json()["id"]
+        created_job_ids.append(job4_id)
+        
+        # Restore normal image provider for this test
+        app.dependency_overrides[get_image_provider] = lambda: fake_image_provider
+
+        class FailingRenderProvider(RenderProvider):
+            def render_video(self, audio_path, image_paths, output_path):
+                raise ValueError("Simulated render failure during execution")
+
+        app.dependency_overrides[get_render_provider] = lambda: FailingRenderProvider()
+        
+        print("\n[Test 13] Execute Job expecting Render failure")
+        response = client.post(f"/jobs/{job4_id}/execute")
+        if response.status_code != 500: raise AssertionError(f"Expected 500, got {response.status_code}")
+        if "Job execution failed" not in response.json()["detail"]:
+            raise AssertionError("Wrong detail error for render failure")
+            
+        print("\n[Test 14] Verify FAILED Job persistence after Render failure")
+        db.expire_all()
+        db_job4 = job_repo.get_by_id(uuid.UUID(job4_id))
+        if db_job4.status != JobStatus.FAILED: raise AssertionError("Job status not FAILED")
+        if db_job4.progress != 80: raise AssertionError(f"Job progress not 80, got {db_job4.progress}")
+        if db_job4.current_step != "Rendering Video": raise AssertionError("Job current_step not Rendering Video")
+        if "Simulated render failure during execution" not in db_job4.error: raise AssertionError("Render error message not persisted")
+        
+        db_video4 = video_repo.get_by_id(uuid.UUID(video4_id))
+        if db_video4.title is None: raise AssertionError("Video title was lost")
+        if db_video4.audio_path is None: raise AssertionError("Video audio_path was lost")
+        if db_video4.rendered_video_path is not None: raise AssertionError("Video rendered_video_path should be None after render failure")
+        
+        img_check4 = img_repo.get_by_video_id(uuid.UUID(video4_id))
+        if len(img_check4) == 0: raise AssertionError("Images were NOT persisted despite render failure")
 
     except Exception:
         print("\n--- UNEXPECTED CRITICAL ERROR ---")

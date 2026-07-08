@@ -4,7 +4,8 @@ from backend.services.pipeline_dependency import get_pipeline_service
 from backend.services.video_service import VideoService
 from backend.services.audio_service import AudioService
 from backend.services.image_service import ImageService
-from backend.api.dependencies import get_video_service_dependency, get_job_service_dependency, get_audio_service_dependency, get_image_service_dependency
+from backend.services.render_service import RenderService
+from backend.api.dependencies import get_video_service_dependency, get_job_service_dependency, get_audio_service_dependency, get_image_service_dependency, get_render_service_dependency
 from backend.workers.video_worker import VideoWorker
 from backend.workers.dependency import get_video_worker
 from backend.services.job_service import JobService
@@ -13,6 +14,7 @@ def get_pipeline_service_dependency(
     video_service: VideoService = Depends(get_video_service_dependency),
     audio_service: AudioService = Depends(get_audio_service_dependency),
     image_service: ImageService = Depends(get_image_service_dependency),
+    render_service: RenderService = Depends(get_render_service_dependency),
 ) -> PipelineService:
     """
     FastAPI integration layer for PipelineService dependency injection.
@@ -22,6 +24,7 @@ def get_pipeline_service_dependency(
         video_service=video_service,
         audio_service=audio_service,
         image_service=image_service,
+        render_service=render_service,
     )
 
 def get_video_worker_dependency(

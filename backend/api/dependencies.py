@@ -13,8 +13,10 @@ from backend.providers.audio.dependency import get_audio_provider
 from backend.services.image_service import ImageService
 from backend.providers.image.base import ImageGenerationProvider
 from backend.providers.image.dependency import get_image_provider
-from backend.services.dependency import get_video_service, get_job_service, get_audio_service, get_image_service
-
+from backend.services.dependency import get_video_service, get_job_service, get_audio_service, get_image_service, get_render_service
+from backend.services.render_service import RenderService
+from backend.providers.render.base import RenderProvider
+from backend.providers.render.dependency import get_render_provider
 def get_video_service_dependency(
     db: Session = Depends(get_db),
     text_provider: TextGenerationProvider = Depends(get_text_provider),
@@ -69,3 +71,14 @@ def get_image_service_dependency(
         image_provider=image_provider,
     )
 
+def get_render_service_dependency(
+    db: Session = Depends(get_db),
+    render_provider: RenderProvider = Depends(get_render_provider),
+) -> RenderService:
+    """
+    FastAPI-specific integration layer for RenderService dependency injection.
+    """
+    return get_render_service(
+        db=db,
+        render_provider=render_provider,
+    )
